@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
+    <style>
+        html,
+        body {
+            height: 100%;
+        }
+        .pc-container {
+            min-height: 100%;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            grid-template-columns: 100%;
+            padding: 200px 10px 10px;
+        }
+        .pc-row a {
+            padding-right: 30px;
+        }
+    </style>
+    <title>PC Power Control</title>
+</head>
+
+<body>
+    <div class="pc-container">
+        <div class="pc-row">
+            <div class="col text-center">
+                <h1>The PC is
+                    <span id="status-badge" style="margin-top: -5px; font-size: xx-large; width: 200px;">
+                        <!-- js magic here -->
+                    </span>
+                </h1>
+            </div>
+        </div>
+        <div class="pc-row">
+            <div class="col text-center">
+                <button id="power-btn" type="button" class="btn btn-primary btn-lg"
+                    style="font-size: xx-large; font-weight: bolder;">
+                    Turn ON
+                </button>
+                <button id="power-off-btn" type="button" class="btn btn-danger btn-lg"
+                    style="font-size: xx-large; font-weight: bolder; display: none;">
+                    Turn OFF
+                </button>
+            </div>
+        </div>
+        <div class="pc-row">
+            <a href="/pc_power_control_diagram.png">schematics PNG</a>
+            <a href="https://www.tinkercad.com/things/c6NdgHqvIkZ-pc-power-switch/editel">tinkercad</a>
+            <a href="https://github.com/segovia/pc-power-control">github</a>
+        </div>
+    </div>
+
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-gtEjrD/SeCtmISkJkNUaaKMoLD0//ElJ19smozuHV6z3Iehds+3Ulb9Bn9Plx0x4"
+        crossorigin="anonymous"></script>
+
+    <script type="text/javascript">
+        const badge = document.getElementById('status-badge');
+        const powerBtn = document.getElementById('power-btn');
+        const powerOffBtn = document.getElementById('power-off-btn');
+
+        function isLoading() {
+            return badge.classList.contains('loading');
+        }
+
+        function setLoading() {
+            if (!isLoading()) {
+                badge.classList = 'badge rounded-pill bg-secondary loading';
+                badge.innerHTML = '<div class="spinner-border"></div>';
+                powerBtn.disabled = true;
+                powerOffBtn.disabled = true;
+            }
+        }
+
+        function setOn() {
+            badge.classList = 'badge rounded-pill bg-success';
+            badge.innerHTML = 'ON';
+            powerBtn.disabled = true;
+            powerOffBtn.disabled = false;
+        }
+
+
+        function setOff() {
+            badge.classList = 'badge rounded-pill bg-secondary';
+            badge.innerHTML = 'OFF';
+            powerBtn.disabled = false;
+            powerOffBtn.disabled = true;
+        }
+
+        function setUnknown() {
+            badge.classList = 'badge rounded-pill bg-warning';
+            badge.innerHTML = 'UNKNOWN';
+            powerBtn.disabled = false;
+            powerOffBtn.disabled = true;
+        }
+
+        function setError() {
+            badge.classList = 'badge rounded-pill bg-danger';
+            badge.innerHTML = 'ERROR';
+            powerBtn.disabled = false;
+            powerOffBtn.disabled = true;
+        }
+
+        function setStatus(text) {
+            if (text === 'ON') {
+                setOn();
+            } else if (text === 'OFF') {
+                setOff();
+            } else {
+                setUnknown();
+            }
+        }
+
+        async function refreshStatus() {
+            try {
+                if (isLoading()) {
+                    return;
+                }
+                setLoading();
+                const response = await fetch('/pc-power-control/status')
+                const text = await response.text();
+                setStatus(text);
+            } catch (e) {
+                setError();
+            }
+        }
+
+        async function waitUntil(status) {
+            try {
+                for (let i = 0; i < 180; ++i) {
+                    const response = await fetch('/pc-power-control/status')
+                    const text = await response.text();
+                    if (text === status) {
+                        return true;
+                    }
+                    await new Promise(res => setTimeout(() => res(), 1000)); // try again 1s later
+                }
+            } catch (e) {
+            }
+            return false;
+        }
+
+        async function powerOn() {
+            try {
+                setLoading();
+                await fetch('/pc-power-control/on');
+                const ok = await waitUntil('ON');
+                if (ok) {
+                    setStatus('ON');
+                } else {
+                    setError();
+                }
+            } catch (e) {
+                setError();
+            }
+        }
+        powerBtn.onclick = powerOn;
+
+        async function powerOff() {
+            try {
+                setLoading();
+                await fetch('/pc-power-control/off');
+                const ok = await waitUntil('OFF');
+                if (ok) {
+                    setStatus('OFF');
+                } else {
+                    setError();
+                }
+            } catch (e) {
+                setError();
+            }
+        }
+        powerOffBtn.onclick = powerOff;
+
+        const anchor = (document.URL.split('#').length > 1) ? document.URL.split('#')[1] : null;
+        if (anchor === 'pro') {
+            powerOffBtn.style.display = 'inline';
+        }
+
+        window.onfocus = () => refreshStatus();
+
+        refreshStatus();
+    </script>
+</body>
+
+</html>
